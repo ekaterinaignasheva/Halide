@@ -12,11 +12,7 @@ $(BIN)/%/conv_layer.a: $(GENERATOR_BIN)/conv_layer.generator
 	@mkdir -p $(@D)
 	$^ -g conv_layer -e $(GENERATOR_OUTPUTS) -o $(@D) -f conv_layer target=$*
 
-$(BIN)/%/conv_layer_auto_schedule.a: $(GENERATOR_BIN)/conv_layer.generator
-	@mkdir -p $(@D)
-	$^ -g conv_layer -e $(GENERATOR_OUTPUTS) -o $(@D) -f conv_layer_auto_schedule target=$*-no_runtime autoscheduler=Mullapudi2016
-
-$(BIN)/%/process: process.cpp $(BIN)/%/conv_layer.a $(BIN)/%/conv_layer_auto_schedule.a
+$(BIN)/%/process: process.cpp $(BIN)/%/conv_layer.a
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -I$(BIN)/$* -Wall $^ -o $@ $(LDFLAGS)
 
