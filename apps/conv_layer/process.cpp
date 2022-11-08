@@ -11,9 +11,12 @@ using namespace Halide::Tools;
 using namespace Halide::Runtime;
 
 int main(int argc, char **argv) {
-    const int T = 4, SD = 32, DD = 16;
-    const int H = 256, W = 256;
-    const int window = 3;
+    const int H = 64, W = 64;
+    const int src_channels = 1024;
+    const int dst_channels = 1024;
+
+    const int T = 4, SD = src_channels / 4, DD = dst_channels / 4;
+    const int window = 1;
 
     Buffer<float, 4> input(T, H, W, SD);
     Buffer<float, 6> filter(4, 4, SD, window, window, DD);
@@ -24,17 +27,28 @@ int main(int argc, char **argv) {
 
     Buffer<float, 4> output(T, H, W, DD);
 
-    for (int i =0; i < 20; i++)
-    conv_layer(input, filter, bias, output);
-
+    for (int i = 0; i < 20; i++) {
+      conv_layer(input, filter, bias, output);
+    }
     // Manually-tuned version
     double min_t_manual = benchmark(10, 100, [&]() {
         conv_layer(input, filter, bias, output);
         output.device_sync();
     });
-    printf("Manually-tuned time: %gms\n", min_t_manual * 1e3);
-    for (int i =0; i < 10; i++){
-      std::cerr << "output " << i << ": " << output.begin()[i] << std::endl;
+    printf("Latency: %gms\n", min_t_manual * 1e3);
+
+    const int iterations = 10;
+    const int iteration_size = 100;
+    for (int i = 0; i < iterations; i++) {
+      const auto start = std::chrono::high_resolution_clock::now();
+      for (int j = 0; j < iteration_size; j++) {
+        conv_layer(input, filter, bias, output);
+      }
+      output.device_sync();
+      const auto end = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double> diff = end - start;
+      const double execution_time_ms = diff.count() / static_cast<double>(iteration_size) * 1000.0;
+      std::cout << execution_time_ms << " ms "<< std::endl;
     }
     return 0;
 }

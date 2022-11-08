@@ -173,6 +173,7 @@ WEAK bool buffer_supports_set_bytes(mtl_compute_command_encoder *encoder) {
 WEAK mtl_library *new_library_with_source(mtl_device *device, const char *source, size_t source_len) {
     objc_id error_return;
     objc_id source_str = wrap_string_as_ns_string(source, source_len);
+    NSLog(source_str);
 
     typedef objc_id (*options_method)(objc_id obj, objc_sel sel);
     options_method method = (options_method)&objc_msgSend;

@@ -8,27 +8,28 @@ using namespace Halide;
 class ConvolutionLayer : public Halide::Generator<ConvolutionLayer> {
 public:
     Input<Buffer<float, 4>> input{"input"};
-    // t_source, k_destination, source_depth, window_h, window_w, destination_depth
     Input<Buffer<float, 6>> weights{"weights"};
     Input<Buffer<float, 2>> bias{"bias"};
     Output<Buffer<float, 4>> output{"output"};
 
     void generate() {
-        const int SD = 32, DD = 16;
-        const int H = 256, W = 256;
-        const int WG_X = 4, WG_Y = 4;
-        const int window = 3;
+        const int H = 64, W = 64;
+        const int src_channels = 1024;
+        const int dst_channels = 1024;
+
+        const int SD = src_channels / 4, DD = dst_channels / 4;
+        const int window = 1;
+
 
         Var t("t"), h("h"), w("w"), d("d");
         Func conv("conv"), padded;
 
-        RDom r(0, 4, 0, SD, -1, window-1);
+        RDom r(0, 4, 0, SD);
 
         padded(t, h, w, d) = input(t, clamp(h, 0, H - 1),
                                 clamp(w, 0, W - 1), d);
         conv(t, h, w, d) = bias(t, d);
-        conv(t, h, w, d) += padded(r.x, h + r.z, w + r.z, r.y) *
-                            weights(r.x, t, r.y, r.z + 1, r.z + 1, d);
+        conv(t, h, w, d) += padded(r.x, h, w, r.y) * weights(r.x, t, r.y, 0, 0, d);
         output(t, h, w, d) = max(0, conv(t, h, w, d));
 
         input.dim(0).set_bounds(0, 4).set_stride(1);
@@ -51,12 +52,36 @@ public:
         output.dim(2).set_bounds(0, W).set_stride(4*H);
         output.dim(3).set_bounds(0, DD).set_stride(4*H*W);
 
-        // conv.update(0).atomic().vectorize(r.x);
+        const int WG_X = 4, WG_Y = 4, WG_Z = 2;
+        Var ho, hi;
+        Var wo, wi;
+        Var do_, di, do_o, do_i;
 
-        const int WG_Z = 2;
-        Var ho, wo, d_o, hi, wi, di;
         output.vectorize(t)
-        .gpu_tile(h, w, d, ho, wo, d_o, hi, wi, di, WG_Z, WG_Y, WG_X);
+        .split(d, do_, di, 4)
+        .reorder(t, di, h, w, do_)
+        .unroll(di)
+        .gpu_tile(h, w, do_, ho, wo, do_o, hi, wi, do_i, WG_Z, WG_Y, WG_X);
+
+        conv.compute_at(output, hi);
+        conv.vectorize(t).unroll(d);
+        conv.update(0).reorder(d, r.x, r.y, t, w, h).vectorize(t).unroll(d);
+
+        // 6.3 ms
+
+        // Var ho, hi, ho_i, ho_o;
+        // Var wo, wi;
+        // Var d_o, di;
+        //
+        // output.vectorize(t)
+        // .split(h, ho, hi, 4)
+        // .unroll(hi)
+        // .gpu_tile(ho, w, d, ho_o, wo, d_o, ho_i, wi, di, WG_Z, WG_Y, WG_X);
+        //
+        // conv.compute_at(output, ho_i);
+        // conv.vectorize(t).unroll(h);
+        // conv.update(0).reorder(h, r.x, r.y, t, w, d).vectorize(t).unroll(h);
+
     }
 };
 
