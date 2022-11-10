@@ -53,34 +53,30 @@ public:
         output.dim(3).set_bounds(0, DD).set_stride(4*H*W);
 
         const int WG_X = 4, WG_Y = 4, WG_Z = 2;
-        Var ho, hi;
-        Var wo, wi;
-        Var do_, di, do_o, do_i;
+
+        Var ho, hi, ho_i, ho_o;
+        Var wo, wo_i, wo_o, wi;
+        Var d_o, di;
 
         output.vectorize(t)
-        .split(d, do_, di, 4)
-        .reorder(t, di, h, w, do_)
-        .unroll(di)
-        .gpu_tile(h, w, do_, ho, wo, do_o, hi, wi, do_i, WG_Z, WG_Y, WG_X);
+        .split(h, ho, hi, 2)
+        .split(w, wo, wi, 4)
+        .reorder(t, hi, wi, ho, wo)
+        .unroll(hi)
+        .unroll(wi)
+        .gpu_tile(ho, wo, d, ho_o, wo_o, d_o, ho_i, wo_i, di, WG_Z, WG_Y, WG_X);
 
-        conv.compute_at(output, hi);
-        conv.vectorize(t).unroll(d);
-        conv.update(0).reorder(d, r.x, r.y, t, w, h).vectorize(t).unroll(d);
-
-        // 6.3 ms
-
-        // Var ho, hi, ho_i, ho_o;
-        // Var wo, wi;
-        // Var d_o, di;
-        //
-        // output.vectorize(t)
-        // .split(h, ho, hi, 4)
-        // .unroll(hi)
-        // .gpu_tile(ho, w, d, ho_o, wo, d_o, ho_i, wi, di, WG_Z, WG_Y, WG_X);
-        //
-        // conv.compute_at(output, ho_i);
-        // conv.vectorize(t).unroll(h);
-        // conv.update(0).reorder(h, r.x, r.y, t, w, d).vectorize(t).unroll(h);
+        conv.compute_at(output, ho_i);
+        conv.vectorize(t)
+            .unroll(h)
+            .unroll(w);
+        conv.update(0)
+            .reorder(r.x, t, h, w, r.y, d)
+            .atomic()
+            .vectorize(r.x)
+            .unroll(t)
+            .unroll(w)
+            .unroll(h);
 
     }
 };

@@ -31,11 +31,11 @@ int main(int argc, char **argv) {
       conv_layer(input, filter, bias, output);
     }
     // Manually-tuned version
-    double min_t_manual = benchmark(10, 100, [&]() {
-        conv_layer(input, filter, bias, output);
-        output.device_sync();
-    });
-    printf("Latency: %gms\n", min_t_manual * 1e3);
+    // double min_t_manual = benchmark(10, 100, [&]() {
+    //     conv_layer(input, filter, bias, output);
+    //     output.device_sync();
+    // });
+    // printf("Latency: %gms\n", min_t_manual * 1e3);
 
     const int iterations = 10;
     const int iteration_size = 100;
